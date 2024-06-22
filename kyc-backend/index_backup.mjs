@@ -4,46 +4,11 @@ import Web3 from 'web3';
 import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
+import chokidar from 'chokidar';
 
 // IPFS and blockchain configuration
 const ipfs = create('http://localhost:5001');
 const web3 = new Web3('http://localhost:8545');
-const contractAddress = '0xE279e9bA6d113CDA00596aA7b336A217c00c3dc8';
-const abi = [
-    {
-        "inputs": [
-            {
-                "internalType": "string",
-                "name": "ipfsHash",
-                "type": "string"
-            }
-        ],
-        "name": "addDocument",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
-            }
-        ],
-        "name": "documents",
-        "outputs": [
-            {
-                "internalType": "string",
-                "name": "",
-                "type": "string"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    }
-];
-const contract = new web3.eth.Contract(abi, contractAddress);
 
 // Directories for reading input JSON and saving output
 const inputDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/KYC_JSON';
@@ -51,6 +16,23 @@ const outputDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/h
 
 // Frappe API URL
 const frappeApiUrl = 'http://202.51.82.246:85/api/resource/Blockchain Hash';
+
+// Function to get contract address dynamically
+async function getContractAddress() {
+    const contractJsonPath = path.join('/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/build/contracts', 'KYCDocument.json');
+    const contractJson = await fs.readFile(contractJsonPath, 'utf8');
+    const contractData = JSON.parse(contractJson);
+    const networkId = await web3.eth.net.getId();
+    return contractData.networks[networkId].address;
+}
+
+// Function to get contract ABI
+async function getContractABI() {
+    const contractJsonPath = path.join('/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/build/contracts', 'KYCDocument.json');
+    const contractJson = await fs.readFile(contractJsonPath, 'utf8');
+    const contractData = JSON.parse(contractJson);
+    return contractData.abi;
+}
 
 // Function to upload a JSON file to IPFS
 async function uploadToIPFS(data) {
@@ -107,15 +89,21 @@ async function sendToFrappe(outputData) {
 }
 
 // Function to upload a JSON file to IPFS and blockchain
-async function uploadDocument(filename) {
+async function uploadDocument(filePath) {
     try {
+        const filename = path.basename(filePath);
+
         // Read JSON file
-        const filePath = path.join(inputDir, filename);
         const data = await fs.readFile(filePath);
 
         // Upload JSON to IPFS
         const ipfsHash = await uploadToIPFS(data);
         console.log(`Uploaded to IPFS with hash: ${ipfsHash}`);
+
+        // Get contract address and ABI dynamically
+        const contractAddress = await getContractAddress();
+        const contractABI = await getContractABI();
+        const contract = new web3.eth.Contract(contractABI, contractAddress);
 
         // Upload IPFS hash to blockchain
         const accounts = await web3.eth.getAccounts();
@@ -138,19 +126,25 @@ async function uploadDocument(filename) {
     }
 }
 
-// Process all JSON files in the input directory
-async function processFiles() {
-    try {
-        const files = await fs.readdir(inputDir);
-        for (const file of files) {
-            if (file.endsWith('.json')) {
-                await uploadDocument(file);
-            }
-        }
-    } catch (error) {
-        console.error('Error processing files:', error);
+// Watch the input directory for new JSON files
+const watcher = chokidar.watch(inputDir, {
+    persistent: true,
+    ignoreInitial: true,
+    awaitWriteFinish: {
+        stabilityThreshold: 2000,
+        pollInterval: 100
     }
-}
+});
 
-// Execute the process
-processFiles();
+// Event listener for added files
+watcher.on('add', filePath => {
+    if (filePath.endsWith('.json')) {
+        console.log(`New JSON file detected: ${filePath}`);
+        uploadDocument(filePath);
+    }
+});
+
+// Error handling for watcher
+watcher.on('error', error => console.error('Watcher error:', error));
+
+console.log(`Watching directory: ${inputDir} for new JSON files...`);
