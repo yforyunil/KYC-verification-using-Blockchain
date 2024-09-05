@@ -155,33 +155,36 @@ async function uploadDocument(filePath) {
 
 // Function to verify document (KYC verification)
 async function verifyDocument(filePath) {
+    // Initialize statusFlag
+    let statusFlag = '';
+    let kycData = {};  // To store KYC data fetched from IPFS
     try {
         // Read the JSON file
         const jsonData = await fs.readFile(filePath, 'utf8');
         const { ipfs_hash, blockchain_hash, user, requested_by } = JSON.parse(jsonData);
 
-        // Get IPFS hash from blockchain using blockchain_hash
-        const contractAddress = await getContractAddress();
-        const contractABI = await getContractABI();
-        const contract = new web3.eth.Contract(contractABI, contractAddress);
+        // Fetch the transaction using the blockchain hash (transaction hash)
+        const transaction = await web3.eth.getTransaction(blockchain_hash);
+        
+        if (!transaction) {
+            console.error(`Transaction not found for hash: ${blockchain_hash}`);
+            statusFlag = 'no block'; // No block found for the given hash
+            return;
+        }
 
-        // Fetch the IPFS hash stored in the blockchain using the blockchain hash
-        const storedIpfsHash = await contract.methods.getDocument(blockchain_hash).call();
+        console.log(`Transaction found for hash: ${blockchain_hash}`);
 
-        console.log(`Fetched IPFS hash from blockchain: ${storedIpfsHash}`);
+        
 
-        // Initialize statusFlag
-        let statusFlag = '';
-        let kycData = {};  // To store KYC data fetched from IPFS
-
-        // Check if the blockchain hash corresponds to a block
-        if (!storedIpfsHash) {
+        // Check if the transaction exists and proceed with IPFS hash verification
+        if (!transaction) {
             statusFlag = 'no block'; // If no block is found
-        } else if (ipfs_hash !== storedIpfsHash) {
+        } else if (ipfs_hash !== transaction.input.trim()) {  // Compare the IPFS hash from the JSON file with the transaction input
+            console.log(`ipfs hash different`, transaction.input.trim());
             statusFlag = 'ipfs hash different'; // If the IPFS hashes do not match
         } else {
             // Fetch KYC data from IPFS
-            const ipfsData = await ipfs.cat(storedIpfsHash); // Fetch data from IPFS
+            const ipfsData = await ipfs.cat(ipfs_hash.trim()); // Fetch data from IPFS
             const ipfsDataStr = ipfsData.toString('utf8'); // Convert Buffer to string
 
             // Try to parse KYC information from IPFS
@@ -197,18 +200,14 @@ async function verifyDocument(filePath) {
 
         // Prepare the payload, adding the KYC data, status, docstatus, and requested_by
         const payloadToSend = {
-            name: user,
-            ipfs_hash,
-            blockchain_hash,
-            docstatus: 1, // Always set docstatus to 1
             status: statusFlag, // Status of the verification
-            requested_by, // Include requested_by from the original file
+            requested_by: requested_by, // Include requested_by from the original file
             ...kycData // Include the KYC data fetched from IPFS
         };
 
         // Send the payload to the verification API
         await sendToVerifyApi(payloadToSend);
-        
+
     } catch (error) {
         console.error('Error verifying document:', error);
         statusFlag = 'error'; // Set status flag to 'error' on exception
