@@ -15,8 +15,8 @@ const uploadDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/K
 const verifyDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/To_verify_hashes_JSON';
 
 // Frappe API URLs for uploads and verifications
-const frappeUploadApiUrl = 'http://202.51.82.246:85/api/resource/';
-const frappeVerifyApiUrl = 'http://202.51.82.246:85/api/resource/VerifiedDocument';
+const frappeUploadApiUrl = 'https://project.dndts.net/api/resource/Blockchain Hash';
+const frappeVerifyApiUrl = 'https://project.dndts.net/api/resource/Verified KYC Forms';
 
 // Function to get contract address dynamically
 async function getContractAddress() {
