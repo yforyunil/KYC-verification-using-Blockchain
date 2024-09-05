@@ -164,22 +164,23 @@ async function verifyDocument(filePath) {
         const { ipfs_hash, blockchain_hash, user, requested_by } = JSON.parse(jsonData);
 
         // Fetch the transaction using the blockchain hash (transaction hash)
-        const transaction = await web3.eth.getTransaction(blockchain_hash);
-        
-        if (!transaction) {
-            console.error(`Transaction not found for hash: ${blockchain_hash}`);
-            statusFlag = 'no block'; // No block found for the given hash
-            return;
+        try {
+            const transaction = await web3.eth.getTransaction(blockchain_hash);
+            if (!transaction) {
+                console.error(`Transaction with hash ${blockchain_hash} not found.`);
+                statusFlag = 'no block'; 
+                return; // Exit the function if transaction is not found
+            }
+        } catch (error) {
+            console.error(`Error fetching transaction for hash ${blockchain_hash}:`, error);
+            return; // Exit on error
         }
-
         console.log(`Transaction found for hash: ${blockchain_hash}`);
 
         
 
         // Check if the transaction exists and proceed with IPFS hash verification
-        if (!transaction) {
-            statusFlag = 'no block'; // If no block is found
-        } else if (ipfs_hash !== transaction.input.trim()) {  // Compare the IPFS hash from the JSON file with the transaction input
+        if (ipfs_hash !== transaction.input.trim()) {  // Compare the IPFS hash from the JSON file with the transaction input
             console.log(`ipfs hash different`, transaction.input.trim());
             statusFlag = 'ipfs hash different'; // If the IPFS hashes do not match
         } else {
