@@ -74,8 +74,8 @@ function saveJsonToFile(data) {
 // Function to save JSON data to a file with a unique name in a different directory
 function saveJsonToDifferentDirectory(data) {
     return new Promise((resolve, reject) => {
-        const fileName = `${uuidv4()}.json`; // Generate a unique file name using UUID
-        const filePath = path.join(process.env.HOME, 'FinalProject', 'KYC-verification-using-Blockchain', 'Other_JSON', fileName);
+        const fileName = `${data.name}.json`;
+        const filePath = path.join(process.env.HOME, 'FinalProject', 'KYC-verification-using-Blockchain', 'To_verify_hashes_JSON', fileName);
 
         fs.writeFile(filePath, JSON.stringify(data, null, 2), (err) => {
             if (err) {
