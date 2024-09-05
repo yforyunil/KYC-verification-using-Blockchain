@@ -187,6 +187,7 @@ async function verifyDocument(filePath) {
     // Initialize statusFlag
     let statusFlag = '';
     let kycData = {};  // To store KYC data fetched from IPFS
+    let transaction;
     try {
         // Read the JSON file
         const jsonData = await fs.readFile(filePath, 'utf8');
@@ -194,7 +195,7 @@ async function verifyDocument(filePath) {
 
         // Fetch the transaction using the blockchain hash (transaction hash)
         try {
-            const transaction = await web3.eth.getTransaction(blockchain_hash);
+            transaction = await web3.eth.getTransaction(blockchain_hash);
             if (!transaction) {
                 console.error(`Transaction with hash ${blockchain_hash} not found.`);
                 statusFlag = 'no block'; 
