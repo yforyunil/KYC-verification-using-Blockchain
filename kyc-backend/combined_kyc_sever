@@ -73,11 +73,18 @@ async function saveHashes(filename, ipfsHash, txHash, owner) {
 
 // Function to send uploaded hashes to the upload API
 async function sendToUploadApi(data) {
+    const { ipfsHash, txHash, owner } = data;
+    const frappeData = {
+        ipfs_hash: ipfsHash,
+        blockchain_hash: txHash,
+        docstatus: 1,
+       owner: owner // Include the owner payload from the input file
+    };
     try {
         const response = await fetch(frappeUploadApiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: JSON.stringify(frappeData)
         });
 
         if (!response.ok) {
