@@ -128,9 +128,11 @@ async function uploadDocument(filePath) {
 
         // Upload IPFS hash to blockchain
         const accounts = await web3.eth.getAccounts();
+        const gasPrice = await web3.eth.getGasPrice();
         const receipt = await contract.methods.addDocument(ipfsHash).send({
             from: accounts[0],
-            gas: 3000000
+            gas: 3000000,
+            gasPrice
         });
         const txHash = receipt.transactionHash;
 
