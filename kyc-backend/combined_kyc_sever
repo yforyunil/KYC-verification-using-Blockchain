@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
 import chokidar from 'chokidar';
+import Web3Abi from 'web3-eth-abi';
 
 // IPFS and blockchain configuration
 const ipfs = create('http://localhost:5001');
@@ -44,6 +45,33 @@ async function getContractABI() {
         throw error;
     }
 }
+
+function decodeIPFSHash(abi, encodedInput) {
+    try {
+        // Extract the function signature (first 4 bytes)
+        const functionSignature = encodedInput.slice(0, 10);
+        const functionData = encodedInput.slice(10); // Remaining data
+
+        // Find the function ABI that matches the signature
+        const functionABI = abi.find(fn => {
+            return '0x' + Web3Abi.encodeFunctionSignature(fn) === functionSignature;
+        });
+
+        if (!functionABI) {
+            throw new Error('Function signature not found in ABI');
+        }
+
+        // Decode the parameters from the function ABI
+        const decodedParams = Web3Abi.decodeParameters(functionABI.inputs, functionData);
+
+        // Assuming the IPFS hash is the first parameter
+        return decodedParams[0];
+    } catch (error) {
+        console.error('Error decoding IPFS hash:', error);
+        return null;
+    }
+}
+
 
 // Function to upload a JSON file to IPFS
 async function uploadToIPFS(data) {
@@ -180,12 +208,15 @@ async function verifyDocument(filePath) {
         
 
         // Check if the transaction exists and proceed with IPFS hash verification
-        if (ipfs_hash !== transaction.input.trim()) {  // Compare the IPFS hash from the JSON file with the transaction input
-            console.log(`ipfs hash different`, transaction.input.trim());
+        const contractABI = await getContractABI();
+        let encodedInput = transaction.input.trim();
+        const decodedIPFSHash = decodeIPFSHash(contractABI, encodedInput);
+        if (ipfs_hash !== decodedIPFSHash) {  // Compare the IPFS hash from the JSON file with the transaction input
+            console.log(`ipfs hash different`, decodedIPFSHash);
             statusFlag = 'ipfs hash different'; // If the IPFS hashes do not match
         } else {
             // Fetch KYC data from IPFS
-            const ipfsData = await ipfs.cat(ipfs_hash.trim()); // Fetch data from IPFS
+            const ipfsData = await ipfs.cat(decodedIPFSHash); // Fetch data from IPFS
             const ipfsDataStr = ipfsData.toString('utf8'); // Convert Buffer to string
 
             // Try to parse KYC information from IPFS
