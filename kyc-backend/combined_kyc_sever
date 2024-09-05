@@ -5,7 +5,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
 import chokidar from 'chokidar';
-import Web3Abi from 'web3-eth-abi';
+import { encodeFunctionSignature, decodeParameters } from 'web3-eth-abi';
+
 
 // IPFS and blockchain configuration
 const ipfs = create('http://localhost:5001');
@@ -49,12 +50,12 @@ async function getContractABI() {
 function decodeIPFSHash(abi, encodedInput) {
     try {
         // Extract the function signature (first 4 bytes)
-        const functionSignature = encodedInput.slice(0, 10);
+        const functionSignature = encodedInput.slice(0, 10); // '0x' + first 8 hex characters
         const functionData = encodedInput.slice(10); // Remaining data
 
         // Find the function ABI that matches the signature
         const functionABI = abi.find(fn => {
-            return '0x' + Web3Abi.encodeFunctionSignature(fn) === functionSignature;
+            return '0x' + encodeFunctionSignature(fn) === functionSignature;
         });
 
         if (!functionABI) {
@@ -62,7 +63,7 @@ function decodeIPFSHash(abi, encodedInput) {
         }
 
         // Decode the parameters from the function ABI
-        const decodedParams = Web3Abi.decodeParameters(functionABI.inputs, functionData);
+        const decodedParams = decodeParameters(functionABI.inputs, functionData);
 
         // Assuming the IPFS hash is the first parameter
         return decodedParams[0];
