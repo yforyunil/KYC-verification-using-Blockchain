@@ -232,6 +232,7 @@ async function verifyDocument(filePath) {
         if (ipfs_hash !== decodedIPFSHash) {  // Compare the IPFS hash from the JSON file with the transaction input
             console.log(`ipfs hash different`, decodedIPFSHash);
             statusFlag = 'ipfs hash different'; // If the IPFS hashes do not match
+	    throw new Error('ipfs hash different');	
         } else {
             // Fetch KYC data from IPFS
             const ipfsData = [];
@@ -251,18 +252,15 @@ async function verifyDocument(filePath) {
                 statusFlag = 'error'; // If parsing the KYC information fails
                 throw parseError; // Rethrow to ensure final catch is triggered
             }
-        }
-
-        // Prepare the payload, adding the KYC data, status, docstatus, and requested_by
-        const payloadToSend = {
-            status: statusFlag, // Status of the verification
-            requested_by: requestedBy, // Include requested_by from the original file
-            ...kycData // Include the KYC data fetched from IPFS
-        };
-
-        // Send the payload to the verification API
-        await sendToVerifyApi(payloadToSend);
-
+		 // Prepare the payload, adding the KYC data, status, docstatus, and requested_by
+	        const payloadToSend = {
+	            status: statusFlag, // Status of the verification
+	            requested_by: requestedBy, // Include requested_by from the original file
+	            ...kycData // Include the KYC data fetched from IPFS
+	        };
+		 // Send the payload to the verification API
+        	await sendToVerifyApi(payloadToSend);
+      	}
     } catch (error) {
         console.error('Error verifying document:', error);
 
