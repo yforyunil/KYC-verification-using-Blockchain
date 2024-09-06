@@ -232,18 +232,23 @@ async function verifyDocument(filePath) {
             statusFlag = 'ipfs hash different'; // If the IPFS hashes do not match
         } else {
             // Fetch KYC data from IPFS
-            const ipfsData = await ipfs.cat(decodedIPFSHash); // Fetch data from IPFS
-            const ipfsDataStr = ipfsData.toString('utf8'); // Convert Buffer to string
+		const ipfsData = [];
+		for await (const chunk of ipfs.cat(decodedIPFSHash)) {
+		    ipfsData.push(chunk);
+		}
+		const ipfsDataBuffer = Buffer.concat(ipfsData); // Concatenate chunks into a single buffer
+		const ipfsDataStr = ipfsDataBuffer.toString('utf8'); // Convert buffer to string
+		
+		// Try to parse KYC information from IPFS
+		try {
+		    kycData = JSON.parse(ipfsDataStr); // Parse IPFS data to JSON
+		    console.log('Fetched KYC information:', kycData);
+		    statusFlag = 'verified'; // If the IPFS data is valid and parsed
+		} catch (parseError) {
+		    console.error('Error parsing KYC information:', parseError);
+		    statusFlag = 'error'; // If parsing the KYC information fails
+		}
 
-            // Try to parse KYC information from IPFS
-            try {
-                kycData = JSON.parse(ipfsDataStr); // Parse IPFS data to JSON
-                console.log('Fetched KYC information:', kycData);
-                statusFlag = 'verified'; // If the IPFS data is valid and parsed
-            } catch (parseError) {
-                console.error('Error parsing KYC information:', parseError);
-                statusFlag = 'error'; // If parsing the KYC information fails
-            }
         }
 
         // Prepare the payload, adding the KYC data, status, docstatus, and requested_by
