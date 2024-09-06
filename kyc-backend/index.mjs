@@ -35,17 +35,27 @@ async function getContractAddress() {
 }
 
 // Function to get contract ABI
-async function getContractABI() {
-    const contractJsonPath = path.join('/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/build/contracts', 'KYCDocument.json');
-    try {
-        const contractJson = await fs.readFile(contractJsonPath, 'utf8');
-        const contractData = JSON.parse(contractJson);
-        return contractData.abi;
-    } catch (error) {
-        console.error('Error reading contract ABI:', error);
-        throw error;
+    async function getContractABI() {
+    // Hardcoded ABI for KYCDocument contract
+    const abi = [
+    {
+        "inputs": [
+            {
+                "internalType": "string",
+                "name": "ipfsHash",
+                "type": "string"
+            }
+        ],
+        "name": "addDocument",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
     }
+];
+
+    return abi;
 }
+
 
 function decodeIPFSHash(abi, encodedInput) {
     try {
@@ -57,7 +67,7 @@ function decodeIPFSHash(abi, encodedInput) {
 	
         // Find the function ABI that matches the signature
         const functionABI = abi.find(fn => {
-            const signature = '0x' + encodeFunctionSignature(fn);
+            const signature = encodeFunctionSignature(fn);
             console.log('ABI Function Signature:', signature);
             return signature === functionSignature;
         });
@@ -222,18 +232,23 @@ async function verifyDocument(filePath) {
             statusFlag = 'ipfs hash different'; // If the IPFS hashes do not match
         } else {
             // Fetch KYC data from IPFS
-            const ipfsData = await ipfs.cat(decodedIPFSHash); // Fetch data from IPFS
-            const ipfsDataStr = ipfsData.toString('utf8'); // Convert Buffer to string
+		const ipfsData = [];
+		for await (const chunk of ipfs.cat(decodedIPFSHash)) {
+		    ipfsData.push(chunk);
+		}
+		const ipfsDataBuffer = Buffer.concat(ipfsData); // Concatenate chunks into a single buffer
+		const ipfsDataStr = ipfsDataBuffer.toString('utf8'); // Convert buffer to string
+		
+		// Try to parse KYC information from IPFS
+		try {
+		    kycData = JSON.parse(ipfsDataStr); // Parse IPFS data to JSON
+		    console.log('Fetched KYC information:', kycData);
+		    statusFlag = 'verified'; // If the IPFS data is valid and parsed
+		} catch (parseError) {
+		    console.error('Error parsing KYC information:', parseError);
+		    statusFlag = 'error'; // If parsing the KYC information fails
+		}
 
-            // Try to parse KYC information from IPFS
-            try {
-                kycData = JSON.parse(ipfsDataStr); // Parse IPFS data to JSON
-                console.log('Fetched KYC information:', kycData);
-                statusFlag = 'verified'; // If the IPFS data is valid and parsed
-            } catch (parseError) {
-                console.error('Error parsing KYC information:', parseError);
-                statusFlag = 'error'; // If parsing the KYC information fails
-            }
         }
 
         // Prepare the payload, adding the KYC data, status, docstatus, and requested_by
