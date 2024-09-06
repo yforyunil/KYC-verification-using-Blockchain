@@ -15,23 +15,33 @@ const inputDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/KY
 const outputDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/hashes_IPFS_Blockchain';
 
 // Frappe API URL
-const frappeApiUrl = 'http://202.51.82.246:85/api/resource/Blockchain Hash';
+const frappeApiUrl = 'https://project.dndts.net/api/resource/Blockchain Hash';
 
 // Function to get contract address dynamically
 async function getContractAddress() {
     const contractJsonPath = path.join('/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/build/contracts', 'KYCDocument.json');
-    const contractJson = await fs.readFile(contractJsonPath, 'utf8');
-    const contractData = JSON.parse(contractJson);
-    const networkId = await web3.eth.net.getId();
-    return contractData.networks[networkId].address;
+    try {
+        const contractJson = await fs.readFile(contractJsonPath, 'utf8');
+        const contractData = JSON.parse(contractJson);
+        const networkId = await web3.eth.net.getId();
+        return contractData.networks[networkId].address;
+    } catch (error) {
+        console.error('Error reading contract address:', error);
+        throw error;
+    }
 }
 
 // Function to get contract ABI
 async function getContractABI() {
     const contractJsonPath = path.join('/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/build/contracts', 'KYCDocument.json');
-    const contractJson = await fs.readFile(contractJsonPath, 'utf8');
-    const contractData = JSON.parse(contractJson);
-    return contractData.abi;
+    try {
+        const contractJson = await fs.readFile(contractJsonPath, 'utf8');
+        const contractData = JSON.parse(contractJson);
+        return contractData.abi;
+    } catch (error) {
+        console.error('Error reading contract ABI:', error);
+        throw error;
+    }
 }
 
 // Function to upload a JSON file to IPFS
@@ -46,9 +56,9 @@ async function uploadToIPFS(data) {
 }
 
 // Function to save the IPFS hash, transaction hash, and filename to a JSON file
-async function saveHashes(filename, ipfsHash, txHash) {
+async function saveHashes(filename, ipfsHash, txHash, owner) {
     try {
-        const outputData = { filename, ipfsHash, txHash };
+        const outputData = { filename, ipfsHash, txHash, owner };
         const outputFilePath = path.join(outputDir, `${filename}.result.json`);
         await fs.writeFile(outputFilePath, JSON.stringify(outputData, null, 2));
         console.log(`Saved hashes to ${outputFilePath}`);
@@ -61,11 +71,12 @@ async function saveHashes(filename, ipfsHash, txHash) {
 
 // Function to send data to Frappe API
 async function sendToFrappe(outputData) {
-    const { ipfsHash, txHash } = outputData;
+    const { ipfsHash, txHash, owner } = outputData;
     const frappeData = {
         ipfs_hash: ipfsHash,
         blockchain_hash: txHash,
-        docstatus: 1
+        docstatus: 1,
+       owner: owner // Include the owner payload from the input file
     };
 
     try {
@@ -94,11 +105,11 @@ async function uploadDocument(filePath) {
         const filename = path.basename(filePath);
 
         // Read JSON file
-        const data = await fs.readFile(filePath);
+        const jsonData = await fs.readFile(filePath, 'utf8');
+        const { owner, ...data } = JSON.parse(jsonData);
 
         // Upload JSON to IPFS
-        const ipfsHash = await uploadToIPFS(data);
-        console.log(`Uploaded to IPFS with hash: ${ipfsHash}`);
+        const ipfsHash = await uploadToIPFS(Buffer.from(JSON.stringify(data)));
 
         // Get contract address and ABI dynamically
         const contractAddress = await getContractAddress();
@@ -117,7 +128,7 @@ async function uploadDocument(filePath) {
         console.log(`Transaction hash: ${txHash}`);
 
         // Save IPFS hash, transaction hash, and filename to a JSON file
-        const outputData = await saveHashes(filename, ipfsHash, txHash);
+        const outputData = await saveHashes(filename, ipfsHash, txHash, owner);
 
         // Send data to Frappe API
         await sendToFrappe(outputData);

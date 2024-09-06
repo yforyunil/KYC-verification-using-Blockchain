@@ -16,7 +16,8 @@
     "express": "^4.19.2",
     "fs": "^0.0.1-security",
     "ipfs-http-client": "^60.0.1",
-    "web3": "^4.10.0"
+    "web3": "^4.10.0",
+    "web3-eth-abi": "^4.2.3"
   },
   "description": ""
 }

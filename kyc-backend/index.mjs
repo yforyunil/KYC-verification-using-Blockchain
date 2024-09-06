@@ -5,17 +5,20 @@ import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
 import chokidar from 'chokidar';
+import { encodeFunctionSignature, decodeParameters } from 'web3-eth-abi';
+
 
 // IPFS and blockchain configuration
 const ipfs = create('http://localhost:5001');
 const web3 = new Web3('http://localhost:8545');
 
-// Directories for reading input JSON and saving output
-const inputDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/KYC_JSON';
-const outputDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/hashes_IPFS_Blockchain';
+// Directories for input JSON and saving output
+const uploadDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/KYC_JSON';
+const verifyDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/To_verify_hashes_JSON';
 
-// Frappe API URL
-const frappeApiUrl = 'http://202.51.82.246:85/api/resource/Blockchain Hash';
+// Frappe API URLs for uploads and verifications
+const frappeUploadApiUrl = 'https://project.dndts.net/api/resource/Blockchain Hash';
+const frappeVerifyApiUrl = 'https://project.dndts.net/api/resource/Verified KYC Forms';
 
 // Function to get contract address dynamically
 async function getContractAddress() {
@@ -44,6 +47,37 @@ async function getContractABI() {
     }
 }
 
+function decodeIPFSHash(abi, encodedInput) {
+    try {
+        // Extract the function signature (first 4 bytes)
+        const functionSignature = encodedInput.slice(0, 10); // '0x' + first 8 hex characters
+        const functionData = encodedInput.slice(10); // Remaining data
+	console.log('Function Signature:', functionSignature);
+        console.log('Function Data:', functionData);
+	
+        // Find the function ABI that matches the signature
+        const functionABI = abi.find(fn => {
+            const signature = '0x' + encodeFunctionSignature(fn);
+            console.log('ABI Function Signature:', signature);
+            return signature === functionSignature;
+        });
+
+        if (!functionABI) {
+            throw new Error('Function signature not found in ABI');
+        }
+
+        // Decode the parameters from the function ABI
+        const decodedParams = decodeParameters(functionABI.inputs, functionData);
+
+        // Assuming the IPFS hash is the first parameter
+        return decodedParams[0];
+    } catch (error) {
+        console.error('Error decoding IPFS hash:', error);
+        return null;
+    }
+}
+
+
 // Function to upload a JSON file to IPFS
 async function uploadToIPFS(data) {
     try {
@@ -57,6 +91,7 @@ async function uploadToIPFS(data) {
 
 // Function to save the IPFS hash, transaction hash, and filename to a JSON file
 async function saveHashes(filename, ipfsHash, txHash, owner) {
+    const outputDir = '/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/hashes_IPFS_Blockchain';
     try {
         const outputData = { filename, ipfsHash, txHash, owner };
         const outputFilePath = path.join(outputDir, `${filename}.result.json`);
@@ -69,42 +104,57 @@ async function saveHashes(filename, ipfsHash, txHash, owner) {
     }
 }
 
-// Function to send data to Frappe API
-async function sendToFrappe(outputData) {
-    const { ipfsHash, txHash, owner } = outputData;
+// Function to send uploaded hashes to the upload API
+async function sendToUploadApi(data) {
+    const { ipfsHash, txHash, owner } = data;
     const frappeData = {
         ipfs_hash: ipfsHash,
         blockchain_hash: txHash,
         docstatus: 1,
        owner: owner // Include the owner payload from the input file
     };
-
     try {
-        const response = await fetch(frappeApiUrl, {
+        const response = await fetch(frappeUploadApiUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(frappeData)
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to send data to Frappe API: ${response.statusText}`);
+            throw new Error(`Failed to send data to Upload API: ${response.statusText}`);
         }
 
         const responseData = await response.json();
-        console.log('Successfully sent data to Frappe API:', responseData);
+        console.log('Successfully sent data to Upload API:', responseData);
     } catch (error) {
-        console.error('Error sending data to Frappe API:', error);
+        console.error('Error sending data to Upload API:', error);
     }
 }
 
-// Function to upload a JSON file to IPFS and blockchain
+// Function to send verified documents to the verification API
+async function sendToVerifyApi(data) {
+    try {
+        const response = await fetch(frappeVerifyApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to send data to Verify API: ${response.statusText}`);
+        }
+
+        const responseData = await response.json();
+        console.log('Successfully sent data to Verify API:', responseData);
+    } catch (error) {
+        console.error('Error sending data to Verify API:', error);
+    }
+}
+
+// Function to upload a document (KYC creation)
 async function uploadDocument(filePath) {
     try {
         const filename = path.basename(filePath);
-
-        // Read JSON file
         const jsonData = await fs.readFile(filePath, 'utf8');
         const { owner, ...data } = JSON.parse(jsonData);
 
@@ -125,37 +175,103 @@ async function uploadDocument(filePath) {
             gasPrice
         });
         const txHash = receipt.transactionHash;
-        console.log(`Transaction hash: ${txHash}`);
 
-        // Save IPFS hash, transaction hash, and filename to a JSON file
+        // Save IPFS hash, transaction hash, and owner
         const outputData = await saveHashes(filename, ipfsHash, txHash, owner);
 
-        // Send data to Frappe API
-        await sendToFrappe(outputData);
+        // Send data to Upload API
+        await sendToUploadApi(outputData);
     } catch (error) {
         console.error('Error uploading document:', error);
     }
 }
 
-// Watch the input directory for new JSON files
-const watcher = chokidar.watch(inputDir, {
+// Function to verify document (KYC verification)
+async function verifyDocument(filePath) {
+    // Initialize statusFlag
+    let statusFlag = '';
+    let kycData = {};  // To store KYC data fetched from IPFS
+    let transaction;
+    try {
+        // Read the JSON file
+        const jsonData = await fs.readFile(filePath, 'utf8');
+        const { ipfs_hash, blockchain_hash, user, requested_by } = JSON.parse(jsonData);
+
+        // Fetch the transaction using the blockchain hash (transaction hash)
+        try {
+            transaction = await web3.eth.getTransaction(blockchain_hash);
+            if (!transaction) {
+                console.error(`Transaction with hash ${blockchain_hash} not found.`);
+                statusFlag = 'no block'; 
+                return; // Exit the function if transaction is not found
+            }
+        } catch (error) {
+            console.error(`Error fetching transaction for hash ${blockchain_hash}:`, error);
+            return; // Exit on error
+        }
+        console.log(`Transaction found for hash: ${blockchain_hash}`);
+
+        
+
+        // Check if the transaction exists and proceed with IPFS hash verification
+        const contractABI = await getContractABI();
+        let encodedInput = transaction.input.trim();
+        const decodedIPFSHash = decodeIPFSHash(contractABI, encodedInput);
+        if (ipfs_hash !== decodedIPFSHash) {  // Compare the IPFS hash from the JSON file with the transaction input
+            console.log(`ipfs hash different`, decodedIPFSHash);
+            statusFlag = 'ipfs hash different'; // If the IPFS hashes do not match
+        } else {
+            // Fetch KYC data from IPFS
+            const ipfsData = await ipfs.cat(decodedIPFSHash); // Fetch data from IPFS
+            const ipfsDataStr = ipfsData.toString('utf8'); // Convert Buffer to string
+
+            // Try to parse KYC information from IPFS
+            try {
+                kycData = JSON.parse(ipfsDataStr); // Parse IPFS data to JSON
+                console.log('Fetched KYC information:', kycData);
+                statusFlag = 'verified'; // If the IPFS data is valid and parsed
+            } catch (parseError) {
+                console.error('Error parsing KYC information:', parseError);
+                statusFlag = 'error'; // If parsing the KYC information fails
+            }
+        }
+
+        // Prepare the payload, adding the KYC data, status, docstatus, and requested_by
+        const payloadToSend = {
+            status: statusFlag, // Status of the verification
+            requested_by: requested_by, // Include requested_by from the original file
+            ...kycData // Include the KYC data fetched from IPFS
+        };
+
+        // Send the payload to the verification API
+        await sendToVerifyApi(payloadToSend);
+
+    } catch (error) {
+        console.error('Error verifying document:', error);
+        statusFlag = 'error'; // Set status flag to 'error' on exception
+    }
+}
+
+
+// Watch both directories for new JSON files
+const watcher = chokidar.watch([uploadDir, verifyDir], {
     persistent: true,
     ignoreInitial: true,
-    awaitWriteFinish: {
-        stabilityThreshold: 2000,
-        pollInterval: 100
-    }
+    awaitWriteFinish: { stabilityThreshold: 2000, pollInterval: 100 }
 });
 
-// Event listener for added files
+// Handle new files in respective directories
 watcher.on('add', filePath => {
-    if (filePath.endsWith('.json')) {
-        console.log(`New JSON file detected: ${filePath}`);
-        uploadDocument(filePath);
+    console.log(`New file detected: ${filePath}`);
+
+    if (filePath.startsWith(uploadDir)) {
+        uploadDocument(filePath); // Process KYC upload
+    } else if (filePath.startsWith(verifyDir)) {
+        verifyDocument(filePath); // Process KYC verification
     }
 });
 
-// Error handling for watcher
+// Handle watcher errors
 watcher.on('error', error => console.error('Watcher error:', error));
 
-console.log(`Watching directory: ${inputDir} for new JSON files...`);
+console.log(`Watching directories: ${uploadDir} and ${verifyDir} for new JSON files...`);
