@@ -36,15 +36,46 @@ async function getContractAddress() {
 
 // Function to get contract ABI
 async function getContractABI() {
-    const contractJsonPath = path.join('/home/ubuntu/FinalProject/KYC-verification-using-Blockchain/build/contracts', 'KYCDocument.json');
-    try {
-        const contractJson = await fs.readFile(contractJsonPath, 'utf8');
-        const contractData = JSON.parse(contractJson);
-        return contractData.abi;
-    } catch (error) {
-        console.error('Error reading contract ABI:', error);
-        throw error;
-    }
+    async function getContractABI() {
+    // Hardcoded ABI for KYCDocument contract
+    const abi = [
+        {
+            "inputs": [
+                {
+                    "internalType": "string",
+                    "name": "ipfsHash",
+                    "type": "string"
+                }
+            ],
+            "name": "addDocument",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "user",
+                    "type": "address"
+                }
+            ],
+            "name": "getDocument",
+            "outputs": [
+                {
+                    "internalType": "string",
+                    "name": "",
+                    "type": "string"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        }
+    ];
+
+    return abi;
+}
+
 }
 
 function decodeIPFSHash(abi, encodedInput) {
