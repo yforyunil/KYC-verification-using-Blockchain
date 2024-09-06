@@ -35,7 +35,6 @@ async function getContractAddress() {
 }
 
 // Function to get contract ABI
-async function getContractABI() {
     async function getContractABI() {
     // Hardcoded ABI for KYCDocument contract
     const abi = [
@@ -76,7 +75,6 @@ async function getContractABI() {
     return abi;
 }
 
-}
 
 function decodeIPFSHash(abi, encodedInput) {
     try {
