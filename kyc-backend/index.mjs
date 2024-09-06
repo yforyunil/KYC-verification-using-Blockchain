@@ -202,10 +202,13 @@ async function verifyDocument(filePath) {
     let statusFlag = '';
     let kycData = {};  // To store KYC data fetched from IPFS
     let transaction;
+    let requestedBy; // To store requested_by from the JSON file
+    
     try {
         // Read the JSON file
         const jsonData = await fs.readFile(filePath, 'utf8');
         const { ipfs_hash, blockchain_hash, user, requested_by } = JSON.parse(jsonData);
+        requestedBy = requested_by; // Save requested_by for error handling
 
         // Fetch the transaction using the blockchain hash (transaction hash)
         try {
@@ -213,15 +216,14 @@ async function verifyDocument(filePath) {
             if (!transaction) {
                 console.error(`Transaction with hash ${blockchain_hash} not found.`);
                 statusFlag = 'no block'; 
-                return; // Exit the function if transaction is not found
+                throw new Error('Transaction not found');
             }
         } catch (error) {
             console.error(`Error fetching transaction for hash ${blockchain_hash}:`, error);
-            return; // Exit on error
+            statusFlag = 'error'; 
+            throw error; // Rethrow to handle in the final catch
         }
         console.log(`Transaction found for hash: ${blockchain_hash}`);
-
-        
 
         // Check if the transaction exists and proceed with IPFS hash verification
         const contractABI = await getContractABI();
@@ -232,29 +234,29 @@ async function verifyDocument(filePath) {
             statusFlag = 'ipfs hash different'; // If the IPFS hashes do not match
         } else {
             // Fetch KYC data from IPFS
-		const ipfsData = [];
-		for await (const chunk of ipfs.cat(decodedIPFSHash)) {
-		    ipfsData.push(chunk);
-		}
-		const ipfsDataBuffer = Buffer.concat(ipfsData); // Concatenate chunks into a single buffer
-		const ipfsDataStr = ipfsDataBuffer.toString('utf8'); // Convert buffer to string
-		
-		// Try to parse KYC information from IPFS
-		try {
-		    kycData = JSON.parse(ipfsDataStr); // Parse IPFS data to JSON
-		    console.log('Fetched KYC information:', kycData);
-		    statusFlag = 'verified'; // If the IPFS data is valid and parsed
-		} catch (parseError) {
-		    console.error('Error parsing KYC information:', parseError);
-		    statusFlag = 'error'; // If parsing the KYC information fails
-		}
-
+            const ipfsData = [];
+            for await (const chunk of ipfs.cat(decodedIPFSHash)) {
+                ipfsData.push(chunk);
+            }
+            const ipfsDataBuffer = Buffer.concat(ipfsData); // Concatenate chunks into a single buffer
+            const ipfsDataStr = ipfsDataBuffer.toString('utf8'); // Convert buffer to string
+            
+            // Try to parse KYC information from IPFS
+            try {
+                kycData = JSON.parse(ipfsDataStr); // Parse IPFS data to JSON
+                console.log('Fetched KYC information:', kycData);
+                statusFlag = 'verified'; // If the IPFS data is valid and parsed
+            } catch (parseError) {
+                console.error('Error parsing KYC information:', parseError);
+                statusFlag = 'error'; // If parsing the KYC information fails
+                throw parseError; // Rethrow to ensure final catch is triggered
+            }
         }
 
         // Prepare the payload, adding the KYC data, status, docstatus, and requested_by
         const payloadToSend = {
             status: statusFlag, // Status of the verification
-            requested_by: requested_by, // Include requested_by from the original file
+            requested_by: requestedBy, // Include requested_by from the original file
             ...kycData // Include the KYC data fetched from IPFS
         };
 
@@ -263,9 +265,18 @@ async function verifyDocument(filePath) {
 
     } catch (error) {
         console.error('Error verifying document:', error);
-        statusFlag = 'error'; // Set status flag to 'error' on exception
+
+        // In case of error, send payload with only status and requested_by
+        const errorPayload = {
+            status: statusFlag || 'error', // Set status flag to 'error' on exception
+            requested_by: requestedBy // Ensure requested_by is sent
+        };
+
+        // Send the error payload to the verification API
+        await sendToVerifyApi(errorPayload);
     }
 }
+
 
 
 // Watch both directories for new JSON files
