@@ -38,39 +38,20 @@ async function getContractAddress() {
     async function getContractABI() {
     // Hardcoded ABI for KYCDocument contract
     const abi = [
-        {
-            "inputs": [
-                {
-                    "internalType": "string",
-                    "name": "ipfsHash",
-                    "type": "string"
-                }
-            ],
-            "name": "addDocument",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-        },
-        {
-            "inputs": [
-                {
-                    "internalType": "address",
-                    "name": "user",
-                    "type": "address"
-                }
-            ],
-            "name": "getDocument",
-            "outputs": [
-                {
-                    "internalType": "string",
-                    "name": "",
-                    "type": "string"
-                }
-            ],
-            "stateMutability": "view",
-            "type": "function"
-        }
-    ];
+    {
+        "inputs": [
+            {
+                "internalType": "string",
+                "name": "ipfsHash",
+                "type": "string"
+            }
+        ],
+        "name": "addDocument",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+];
 
     return abi;
 }
