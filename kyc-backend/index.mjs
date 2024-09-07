@@ -203,12 +203,14 @@ async function verifyDocument(filePath) {
     let kycData = {};  // To store KYC data fetched from IPFS
     let transaction;
     let requestedBy; // To store requested_by from the JSON file
+	let userJson;
     
     try {
         // Read the JSON file
         const jsonData = await fs.readFile(filePath, 'utf8');
         const { ipfs_hash, blockchain_hash, user, requested_by } = JSON.parse(jsonData);
         requestedBy = requested_by; // Save requested_by for error handling
+	    userJson = user;
 
         // Fetch the transaction using the blockchain hash (transaction hash)
         try {
@@ -256,6 +258,7 @@ async function verifyDocument(filePath) {
 	        const payloadToSend = {
 	            status: statusFlag, // Status of the verification
 	            requested_by: requestedBy, // Include requested_by from the original file
+		    user: userJson,
 	            ...kycData // Include the KYC data fetched from IPFS
 	        };
 		 // Send the payload to the verification API
@@ -267,7 +270,10 @@ async function verifyDocument(filePath) {
         // In case of error, send payload with only status and requested_by
         const errorPayload = {
             status: statusFlag || 'error', // Set status flag to 'error' on exception
-            requested_by: requestedBy // Ensure requested_by is sent
+            requested_by: requestedBy, // Ensure requested_by is sent
+	    user: userJson
+		
+		
         };
 
         // Send the error payload to the verification API
