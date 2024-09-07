@@ -256,7 +256,7 @@ async function verifyDocument(filePath) {
             }
 		 // Prepare the payload, adding the KYC data, status, docstatus, and requested_by
 	        const payloadToSend = {
-	            status: statusFlag, // Status of the verification
+	            verify_status: statusFlag, // Status of the verification
 	            requested_by: requestedBy, // Include requested_by from the original file
 		    user: userJson,
 	            ...kycData // Include the KYC data fetched from IPFS
@@ -269,7 +269,8 @@ async function verifyDocument(filePath) {
 
         // In case of error, send payload with only status and requested_by
         const errorPayload = {
-            status: statusFlag, // Set status flag to 'error' on exception
+            verify_status: statusFlag, // Set status flag to 'error' on exception
+	    docstatus: 1,
             requested_by: requestedBy, // Ensure requested_by is sent
 	    user: userJson
 		
