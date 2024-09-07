@@ -269,7 +269,7 @@ async function verifyDocument(filePath) {
 
         // In case of error, send payload with only status and requested_by
         const errorPayload = {
-            status: statusFlag || 'error', // Set status flag to 'error' on exception
+            status: statusFlag, // Set status flag to 'error' on exception
             requested_by: requestedBy, // Ensure requested_by is sent
 	    user: userJson
 		
