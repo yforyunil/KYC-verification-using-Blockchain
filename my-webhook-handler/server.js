@@ -8,7 +8,6 @@ const app = express();
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
 
-
 // Route to handle webhook from Frappe
 app.post('/upload', async (req, res) => {
     const data = req.body;
@@ -16,17 +15,11 @@ app.post('/upload', async (req, res) => {
         console.log('Received data:', data);
 
         try {
-            // Step 1: Download the photo from the 'encoded' URL
-            const imageUrl = data.encoded;
-            const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-        console.log('axios response', response);
-            
-            // Step 2: Convert the image to base64 format
-            const base64Image = Buffer.from(response.data, 'binary').toString('base64');
-        console.log('encoded response', base64Image);
-            
-            // Step 3: Replace the 'encoded' field with the base64 data
-            data.encoded = base64Image;
+            // Encode all photo fields
+            data.main_photo_encoded = await encodePhoto(data.main_photo_encoded);
+            data.citizenship_photo_encoded = await encodePhoto(data.citizenship_photo_encoded);
+            data.citizenship_back_encoded = await encodePhoto(data.citizenship_back_encoded);
+            data.with_face_photo_encoded = await encodePhoto(data.with_face_photo_encoded);
 
             // Save the modified JSON data to a file
             await saveJsonToFile(data);
@@ -40,6 +33,29 @@ app.post('/upload', async (req, res) => {
         res.status(400).json({ status: 'error', message: 'No data received' });
     }
 });
+
+// Function to download and encode a photo as base64 with the required prefix
+async function encodePhoto(photoUrl) {
+    
+    try {
+        if (!photoUrl) {
+        throw new Error('no photo url');  // Handle the case where the URL is not provided
+    }
+
+        // Step 1: Download the photo from the provided URL
+        const response = await axios.get(photoUrl, { responseType: 'arraybuffer' });
+
+        // Step 2: Convert the image to base64 format
+        const base64Image = Buffer.from(response.data, 'binary').toString('base64');
+
+        // Step 3: Concatenate 'data:image;base64,' and return the result
+        return `data:image;base64,${base64Image}`;
+    } catch (error) {
+        console.error(`Failed to download and encode photo from URL: ${photoUrl}`, error);
+        throw error;
+    }
+}
+
 
 
 // Route to handle receiving and saving JSON files to another directory
