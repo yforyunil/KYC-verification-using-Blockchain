@@ -116,9 +116,9 @@ async function saveHashes(filename, ipfsHash, txHash, owner) {
 
 // Function to send uploaded hashes to the upload API
 async function sendToUploadApi(data) {
-    const {filename, ipfsHash, txHash, owner } = data;
+    const {citizenship_no, ipfsHash, txHash, owner } = data;
     const frappeData = {
-	citizenship_number: filename,
+	citizenship_number: citizenship_no,
         ipfs_hash: ipfsHash,
         blockchain_hash: txHash,
         docstatus: 1,
@@ -167,7 +167,7 @@ async function uploadDocument(filePath) {
     try {
         const filename = path.basename(filePath);
         const jsonData = await fs.readFile(filePath, 'utf8');
-        const { owner, ...data } = JSON.parse(jsonData);
+        const { owner,citizenship_no, ...data } = JSON.parse(jsonData);
 
         // Upload JSON to IPFS
         const ipfsHash = await uploadToIPFS(Buffer.from(JSON.stringify(data)));
@@ -189,9 +189,9 @@ async function uploadDocument(filePath) {
 
         // Save IPFS hash, transaction hash, and owner
         const outputData = await saveHashes(filename, ipfsHash, txHash, owner);
-
+	let ApiData = { citizenship_no, ipfsHash, txHash, owner };
         // Send data to Upload API
-        await sendToUploadApi(outputData);
+        await sendToUploadApi(ApiData);
     } catch (error) {
         console.error('Error uploading document:', error);
     }
