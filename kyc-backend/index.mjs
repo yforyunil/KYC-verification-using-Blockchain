@@ -73,7 +73,7 @@ function encryptData(data) {
         const iv = crypto.randomBytes(16);
 
         // Create AES cipher (AES-256-CBC mode)
-        const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(secretKey, 'utf8'), iv);
+        const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(secretKey, 'hex'), iv);
 
         // Encrypt the data
         let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'base64');
@@ -111,7 +111,7 @@ function decryptData(encryptedJson) {
         const encryptedBuffer = Buffer.from(encryptedData, 'base64');
 
         // Create AES decipher (AES-256-CBC mode)
-        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(secretKey, 'utf8'), ivBuffer);
+        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(secretKey, 'hex'), ivBuffer);
 
         // Decrypt the data
         let decrypted = decipher.update(encryptedBuffer, 'base64', 'utf8');
@@ -238,7 +238,7 @@ async function uploadDocument(filePath) {
         const { owner,citizenship_no, ...data } = JSON.parse(jsonData);
 
 	//encrypt the kyc data
-	const encryptedResult = encodeData(data);
+	const encryptedResult = encryptData(data);
 	console.log('Encrypted Data:', encryptedResult);
 
         // Upload JSON to IPFS
