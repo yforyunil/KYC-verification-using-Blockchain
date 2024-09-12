@@ -6,7 +6,11 @@ import path from 'path';
 import fetch from 'node-fetch';
 import chokidar from 'chokidar';
 import { encodeFunctionSignature, decodeParameters } from 'web3-eth-abi';
+import crypto from 'crypto';
+import dotenv from 'dotenv';
 
+// Load environment variables from the .env file
+dotenv.config();
 
 // IPFS and blockchain configuration
 const ipfs = create('http://localhost:5001');
@@ -56,6 +60,70 @@ async function getContractAddress() {
     return abi;
 }
 
+// Function to encrypt data (encoding)
+function encryptData(data) {
+    try {
+        const secretKey = process.env.ENCRYPTION_KEY;
+
+        if (!secretKey) {
+            throw new Error('Missing encryption key');
+        }
+
+        // Generate Initialization Vector (IV)
+        const iv = crypto.randomBytes(16);
+
+        // Create AES cipher (AES-256-CBC mode)
+        const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(secretKey, 'utf8'), iv);
+
+        // Encrypt the data
+        let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'base64');
+        encrypted += cipher.final('base64');
+
+        // Return the IV and encrypted data
+        return {
+            iv: iv.toString('base64'),
+            encryptedData: encrypted
+        };
+    } catch (error) {
+        console.error('Error during encryption:', error.message);
+        throw new Error('Failed to encrypt the data.');
+    }
+}
+// Function to decrypt data (decoding)
+function decryptData(encryptedJson) {
+    try {
+        const secretKey = process.env.ENCRYPTION_KEY;
+
+        if (!secretKey) {
+            throw new Error('Missing encryption key');
+        }
+
+        // Parse JSON if encryptedJson is a string
+        const parsedJson = typeof encryptedJson === 'string' ? JSON.parse(encryptedJson) : encryptedJson;
+        const { iv, encryptedData } = parsedJson;
+
+        if (!iv || !encryptedData) {
+            throw new Error('Invalid input data');
+        }
+
+        // Convert base64-encoded strings to Buffers
+        const ivBuffer = Buffer.from(iv, 'base64');
+        const encryptedBuffer = Buffer.from(encryptedData, 'base64');
+
+        // Create AES decipher (AES-256-CBC mode)
+        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(secretKey, 'utf8'), ivBuffer);
+
+        // Decrypt the data
+        let decrypted = decipher.update(encryptedBuffer, 'base64', 'utf8');
+        decrypted += decipher.final('utf8');
+
+        // Return the decrypted data as a JSON object
+        return JSON.parse(decrypted);
+    } catch (error) {
+        console.error('Error during decryption:', error.message);
+        throw new Error('Failed to decrypt the data.');
+    }
+}
 
 function decodeIPFSHash(abi, encodedInput) {
     try {
@@ -169,8 +237,12 @@ async function uploadDocument(filePath) {
         const jsonData = await fs.readFile(filePath, 'utf8');
         const { owner,citizenship_no, ...data } = JSON.parse(jsonData);
 
+	//encrypt the kyc data
+	const encryptedResult = encodeData(data);
+	console.log('Encrypted Data:', encryptedResult);
+
         // Upload JSON to IPFS
-        const ipfsHash = await uploadToIPFS(Buffer.from(JSON.stringify(data)));
+        const ipfsHash = await uploadToIPFS(Buffer.from(JSON.stringify(encryptedResult)));
 
         // Get contract address and ABI dynamically
         const contractAddress = await getContractAddress();
@@ -237,7 +309,7 @@ async function verifyDocument(filePath) {
             statusFlag = 'ipfs hash different'; // If the IPFS hashes do not match
 	    throw new Error('ipfs hash different');	
         } else {
-            // Fetch KYC data from IPFS
+            // Fetch data from IPFS
             const ipfsData = [];
             for await (const chunk of ipfs.cat(decodedIPFSHash)) {
                 ipfsData.push(chunk);
@@ -247,7 +319,7 @@ async function verifyDocument(filePath) {
             
             // Try to parse KYC information from IPFS
             try {
-                kycData = JSON.parse(ipfsDataStr); // Parse IPFS data to JSON
+                kycData = decryptData(ipfsDataStr) // decrypt to get kyc info
                 console.log('Fetched KYC information:', kycData);
                 statusFlag = 'Verified'; // If the IPFS data is valid and parsed
             } catch (parseError) {
